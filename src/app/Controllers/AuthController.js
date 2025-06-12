@@ -13,12 +13,197 @@ const generateAccessToken = (user) => {
     { expiresIn: "1d" }
   );
 };
+
 const generateRefreshToken = (user) => {
   return jwt.sign(
     { _id: user._id, role: user.role },
     process.env.JWT_REFRESHTOKEN_KEY,
     { expiresIn: "365d" }
   );
+};
+
+// Helper function to set authentication tokens
+const setAuthTokens = (res, user) => {
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
+
+  res.cookie("refreshToken", refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+    path: "/",
+  });
+
+  return accessToken;
+};
+
+// Helper function to validate Google token and get user info
+const verifyGoogleToken = async (code) => {
+  try {
+    const response = await axios.post("https://oauth2.googleapis.com/token", {
+      code,
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      redirect_uri: "postmessage",
+      grant_type: "authorization_code",
+    });
+
+    const { id_token } = response.data;
+    const userDecoded = jwt.decode(id_token);
+
+    if (!userDecoded) {
+      throw new Error("Invalid Google token");
+    }
+
+    return userDecoded;
+  } catch (error) {
+    throw new Error("Failed to verify Google token: " + error.message);
+  }
+};
+
+// Helper function to format user response
+const formatUserResponse = (user, accessToken, message) => {
+  const { password, ...userData } = user._doc;
+  return {
+    success: true,
+    message: message || "Login Success",
+    data: { ...userData, accessToken },
+  };
+};
+
+// Base login function that can be used for both regular and admin login
+const baseLogin = async (email, password, requireAdmin = false) => {
+  const user = await UserModel.findOne({ email });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  if (requireAdmin && user.role !== "admin") {
+    throw new Error("Access denied. Admin privileges required.");
+  }
+
+  const isPasswordCorrect = await bcrypt.compare(password, user.password);
+  if (!isPasswordCorrect) {
+    throw new Error("Password is incorrect");
+  }
+
+  // Update user status to active when logging in
+  user.status = "active";
+  await user.save();
+
+  return user;
+};
+
+// Regular login endpoints
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await baseLogin(email, password);
+    const accessToken = setAuthTokens(res, user);
+    return res.status(200).json(formatUserResponse(user, accessToken));
+  } catch (error) {
+    return res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const adminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await baseLogin(email, password, true);
+    const accessToken = setAuthTokens(res, user);
+    return res
+      .status(200)
+      .json(
+        formatUserResponse(
+          user,
+          accessToken,
+          "Login with admin account success"
+        )
+      );
+  } catch (error) {
+    return res.status(error.message.includes("Admin") ? 403 : 400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Google login endpoints
+const handleGoogleLogin = async (userDecoded, requireAdmin = false) => {
+  let user = await UserModel.findOne({ googleId: userDecoded.sub });
+
+  if (!user) {
+    user = await UserModel.findOne({ email: userDecoded.email });
+  }
+
+  if (!user) {
+    if (requireAdmin) {
+      throw new Error("Access denied. Admin account not found.");
+    }
+    // For regular users, create new account
+    const username = await generateUniqueUsername(userDecoded.given_name);
+    user = new UserModel({
+      username,
+      email: userDecoded.email,
+      googleId: userDecoded.sub,
+      gender: userDecoded.gender || "other",
+      avatar:
+        "https://res.cloudinary.com/djmeybzjk/image/upload/v1745252587/01_odv3vg.jpg",
+      role: "user",
+      status: "active", // Set initial status to active
+    });
+    await user.save();
+  } else {
+    if (requireAdmin && user.role !== "admin") {
+      throw new Error("Access denied. Admin privileges required.");
+    }
+    // Update Google ID, avatar, and status
+    user.googleId = userDecoded.sub;
+    user.avatar = userDecoded.picture
+      ? encodeURI(userDecoded.picture)
+      : user.avatar;
+    user.status = "active"; // Update status to active when logging in
+    await user.save();
+  }
+
+  return user;
+};
+
+// Helper function to generate unique username
+const generateUniqueUsername = async (baseName) => {
+  let username = baseName;
+  let counter = 1;
+  while (await UserModel.findOne({ username })) {
+    username = `${baseName}${counter}`;
+    counter++;
+  }
+  return username;
+};
+
+export const googleLogin = async (req, res) => {
+  try {
+    const userDecoded = await verifyGoogleToken(req.body.code);
+    const user = await handleGoogleLogin(userDecoded);
+    const accessToken = setAuthTokens(res, user);
+    return res.status(200).json(formatUserResponse(user, accessToken));
+  } catch (error) {
+    return res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const adminGoogleLogin = async (req, res) => {
+  try {
+    const userDecoded = await verifyGoogleToken(req.body.code);
+    const user = await handleGoogleLogin(userDecoded, true);
+    const accessToken = setAuthTokens(res, user);
+    return res.status(200).json(formatUserResponse(user, accessToken));
+  } catch (error) {
+    return res.status(error.message.includes("Admin") ? 403 : 400).json({
+      success: false,
+      message: error.message,
+    });
+  }
 };
 
 export const register = async (req, res) => {
@@ -62,119 +247,6 @@ export const register = async (req, res) => {
   }
 };
 
-export const login = async (req, res) => {
-  const { email } = req.body;
-  try {
-    const user = await UserModel.findOne({ email });
-    if (!user) {
-      return res
-        .status(400)
-        .json({ success: false, message: "User not found" });
-    }
-    const isPasswordCorrect = await bcrypt.compare(
-      req.body.password,
-      user.password
-    );
-    if (!isPasswordCorrect) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Password is incorrect" });
-    }
-    const { role, password, ...rest } = user._doc;
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax", // cross-site cookie in production
-      path: "/",
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: "Login Success",
-      data: { ...rest, accessToken },
-    });
-  } catch (error) {
-    return res.status(400).json({ success: false, error: error.message });
-  }
-};
-
-export const googleLogin = async (req, res) => {
-  const { code } = req.body;
-  try {
-    const response = await axios.post("https://oauth2.googleapis.com/token", {
-      code,
-      client_id: process.env.GOOGLE_CLIENT_ID,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET,
-      redirect_uri: "postmessage",
-      grant_type: "authorization_code",
-    });
-    
-    const { id_token } = response.data;
-    const userDecoded = jwt.decode(id_token);
-    
-    if (!userDecoded) {
-      return res
-        .status(400)
-        .json({ success: false, message: "User not found" });
-    }
-    
-    // First try to find user by Google ID
-    let user = await UserModel.findOne({ googleId: userDecoded.sub });
-    
-    // If not found by Google ID, try by email
-    if (!user) {
-      user = await UserModel.findOne({ email: userDecoded.email });
-      
-      // If user exists with this email but has a password, they've registered normally
-      if (user && user.password) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Email already registered. Please use password to login." });
-      }
-    }
-    
-    // Create new user if not found
-    if (!user) {
-      user = new UserModel({
-        username: userDecoded.given_name,
-        email: userDecoded.email,
-        googleId: userDecoded.sub,
-        gender: userDecoded.gender || "other",
-        avatar: userDecoded.picture || "",
-        role: "user",
-      });
-      await user.save();
-    } else if (!user.googleId) {
-      // Update existing user with Google ID if they don't have one
-      user.googleId = userDecoded.sub;
-      await user.save();
-    }
-    
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
-
-    const { password, ...rest } = user._doc;
-    
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-      path: "/",
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: "Login Success",
-      data: { ...rest, accessToken },
-    });
-  } catch (error) {
-    console.error("Google login error:", error);
-    return res.status(400).json({ success: false, error: error.message });
-  }
-};
-
 export const logout = async (req, res) => {
   const userId = req.user._id;
   try {
@@ -184,8 +256,11 @@ export const logout = async (req, res) => {
         .status(400)
         .json({ success: false, message: "User not found" });
     }
+    // Update user status to inactive when logging out
+    user.status = "inactive";
     user.accessToken = null;
     await user.save();
+    
     res.clearCookie("refreshToken");
     return res.status(200).json({ success: true, message: "Logout Success" });
   } catch (error) {

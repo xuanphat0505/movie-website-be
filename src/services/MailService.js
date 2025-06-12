@@ -26,3 +26,5 @@ export const sendMail = async (to, subject, html) => {
   const result = await transporter.sendMail(message);
   return result;
 };
+
+

@@ -170,14 +170,14 @@ export const updateUser = async (req, res) => {
       gender,
       avatar,
     });
-    return res
-      .status(200)
-      .json({
-        success: true,
-        message: "Cập nhận hồ sơ thành công",
-        data: user,
-      });
+    return res.status(200).json({
+      success: true,
+      message: "Cập nhận hồ sơ thành công",
+      data: user,
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+

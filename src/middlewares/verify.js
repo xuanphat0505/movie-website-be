@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import UserModel from "../app/Models/UserModel.js";
 
 export const verifyToken = (req, res, next) => {
   const token = req.headers["authorization"];
@@ -21,6 +22,7 @@ export const verifyToken = (req, res, next) => {
       .json({ success: false, message: "You're not authenticated" });
   }
 };
+
 export const verifyUser = (req, res, next) => {
   verifyToken(req, res, () => {
     if (req.user._id === req.params.id || req.user.role === "admin") {
@@ -32,6 +34,7 @@ export const verifyUser = (req, res, next) => {
     }
   });
 };
+
 export const verifyAdmin = (req, res, next) => {
   verifyToken(req, res, () => {
     if (req.user.role === "admin") {

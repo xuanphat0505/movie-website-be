@@ -69,8 +69,6 @@ export const deleteWatchHistory = async (req, res) => {
 export const updateWatchHistory = async (req, res) => {
   const userId = req.user._id;
   try {
-    console.log("Updating watch history for:", req.body.slug, "Episode:", req.body.episode?.name);
-    
     const {
       movieId,
       slug,
@@ -81,17 +79,17 @@ export const updateWatchHistory = async (req, res) => {
       currentTime,
       duration,
       progressPercent,
-      episode
+      episode,
     } = req.body;
-    
+
     // Kiểm tra dữ liệu cần thiết
     if (!movieId || !slug) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Missing required fields: movieId or slug" 
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: movieId or slug",
       });
     }
-    
+
     // Sửa lỗi: Phải tìm theo điều kiện {userId, slug} thay vì chỉ {userId}
     // Đảm bảo chỉ cập nhật đúng bản ghi của người dùng và phim cụ thể
     const updateResult = await WatchHistoryModel.findOneAndUpdate(
@@ -108,17 +106,14 @@ export const updateWatchHistory = async (req, res) => {
         duration,
         progressPercent,
         episode,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       },
       { upsert: true, new: true }
     );
-    
-    // Sau khi cập nhật thành công, log kết quả
-    console.log("Updated to episode:", updateResult.episode?.name);
-    
+
     res.status(200).json({
       success: true,
-      data: updateResult
+      data: updateResult,
     });
   } catch (error) {
     console.error("Error updating watch history:", error);
