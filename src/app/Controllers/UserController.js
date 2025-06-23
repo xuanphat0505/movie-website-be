@@ -33,7 +33,7 @@ export const forgetPassword = async (req, res) => {
 
     // Tạo URL đặt lại mật khẩu
     const resetUrl = `${
-      process.env.FRONTEND_URL || "http://localhost:5173"
+      process.env.FRONTEND_URL || "http://localhost:5174"
     }/change-password?token=${resetToken}`;
 
     // Gửi email với link reset
@@ -43,10 +43,7 @@ export const forgetPassword = async (req, res) => {
       `<p>Xin chào <strong>${user.username}</strong>,</p>
       <p>Chúng tôi nhận được yêu cầu thiết lập lại mật khẩu cho tài khoản của bạn trên RoPhim. Nếu bạn đã yêu cầu điều này, vui lòng nhấp vào liên kết bên dưới để thiết lập lại mật khẩu của bạn:</p>
       <p><a href="${resetUrl}" style="color: #15c;">Thiết lập lại mật khẩu</a></p>
-      <p><strong>Lưu ý:</strong></p>
-      <ul>
-        <li>Liên kết trên sẽ hết hạn sau 30 phút kể từ thời điểm yêu cầu.</li>
-      </ul>
+      <p><strong>Lưu ý: Liên kết trên sẽ hết hạn sau 30 phút kể từ thời điểm yêu cầu.</strong></p>
       `
     );
 
@@ -179,5 +176,3 @@ export const updateUser = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
-
