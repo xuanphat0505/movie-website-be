@@ -149,3 +149,4 @@ export const readAllNotifications = async (req, res) => {
     });
   }
 };
+

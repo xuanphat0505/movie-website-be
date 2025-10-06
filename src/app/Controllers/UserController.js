@@ -33,7 +33,7 @@ export const forgetPassword = async (req, res) => {
 
     // Tạo URL đặt lại mật khẩu
     const resetUrl = `${
-      process.env.FRONTEND_URL || "http://localhost:5174"
+      process.env.FRONTEND_URL || "http://localhost:5173"
     }/change-password?token=${resetToken}`;
 
     // Gửi email với link reset
