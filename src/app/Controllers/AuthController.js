@@ -10,7 +10,7 @@ const generateAccessToken = (user) => {
   return jwt.sign(
     { _id: user._id, role: user.role },
     process.env.JWT_ACCESSTOKEN_KEY,
-    { expiresIn: "1d" }
+    { expiresIn: "1d" },
   );
 };
 
@@ -18,7 +18,7 @@ const generateRefreshToken = (user) => {
   return jwt.sign(
     { _id: user._id, role: user.role },
     process.env.JWT_REFRESHTOKEN_KEY,
-    { expiresIn: "365d" }
+    { expiresIn: "365d" },
   );
 };
 
@@ -118,8 +118,8 @@ export const adminLogin = async (req, res) => {
         formatUserResponse(
           user,
           accessToken,
-          "Login with admin account success"
-        )
+          "Login with admin account success",
+        ),
       );
   } catch (error) {
     return res.status(error.message.includes("Admin") ? 403 : 400).json({
@@ -149,7 +149,7 @@ const handleGoogleLogin = async (userDecoded, requireAdmin = false) => {
       googleId: userDecoded.sub,
       gender: userDecoded.gender || "other",
       avatar:
-        "https://res.cloudinary.com/djmeybzjk/image/upload/v1745252587/01_odv3vg.jpg",
+        "https://res.cloudinary.com/drngsxvb3/image/upload/q_auto/f_auto/v1776490861/user_rnttki.png",
       role: "user",
       status: "active", // Set initial status to active
     });
@@ -260,7 +260,7 @@ export const logout = async (req, res) => {
     user.status = "inactive";
     user.accessToken = null;
     await user.save();
-    
+
     res.clearCookie("refreshToken");
     return res.status(200).json({ success: true, message: "Logout Success" });
   } catch (error) {
@@ -294,7 +294,7 @@ export const refreshToken = async (req, res) => {
           message: "Refresh Token Success",
           data: { accessToken: newAccessToken },
         });
-      }
+      },
     );
   } catch (error) {
     return res.status(400).json({ success: false, error: error.message });

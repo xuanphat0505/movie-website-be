@@ -7,7 +7,9 @@ import {
   deleteUser,
   addNewUser,
   updateUser,
+  uploadImage,
 } from "../app/Controllers/AdminController.js";
+import uploadMiddleware from "../middlewares/upload.js";
 
 const router = express.Router();
 
@@ -20,6 +22,7 @@ router.get("/users/search", searchUsers);
 router.delete("/users/:id", deleteUser);
 router.post("/users/add", addNewUser);
 router.put("/users/update/:id", updateUser);
+router.post("/upload", uploadMiddleware.single("avatar"), uploadImage);
 
 export default router;
 

@@ -15,7 +15,7 @@ const userSchema = new mongoose.Schema(
     avatar: {
       type: String,
       default:
-        "https://res.cloudinary.com/djmeybzjk/image/upload/v1745252587/01_odv3vg.jpg",
+        "https://res.cloudinary.com/drngsxvb3/image/upload/q_auto/f_auto/v1776490861/user_rnttki.png",
     },
     role: { type: String, enum: ["user", "admin"], default: "user" },
     status: { type: String, enum: ["active", "inactive"], default: "inactive" },
@@ -36,8 +36,8 @@ const userSchema = new mongoose.Schema(
             type: { type: String, enum: ["add", "update", "delete"] },
             message: { type: String },
             read: { type: Boolean, default: false },
-            timestamp: { type: Date, default: Date.now }
-          }
+            timestamp: { type: Date, default: Date.now },
+          },
         ],
         loginHistory: [
           {
@@ -52,7 +52,7 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const UserModel = mongoose.model("users", userSchema);

@@ -180,7 +180,7 @@ export const addNewUser = async (req, res) => {
 
     // Update notification list for all admins
     await UserModel.updateMany(
-      { role: "admin" },
+      { role: "admin", adminInfo: { $ne: null } },
       {
         $push: {
           "adminInfo.notificationList": notification
@@ -356,7 +356,7 @@ export const deleteUser = async (req, res) => {
 
     // Update notification list for all admins
     await UserModel.updateMany(
-      { role: "admin" },
+      { role: "admin", adminInfo: { $ne: null } },
       {
         $push: {
           "adminInfo.notificationList": notification
@@ -484,7 +484,7 @@ export const updateUser = async (req, res) => {
 
     // Update notification list for all admins
     await UserModel.updateMany(
-      { role: "admin" },
+      { role: "admin", adminInfo: { $ne: null } },
       {
         $push: {
           "adminInfo.notificationList": notification
@@ -538,4 +538,11 @@ export const updateUser = async (req, res) => {
       message: error.message || "Có lỗi xảy ra khi cập nhật thông tin user",
     });
   }
+};
+
+export const uploadImage = (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: "Không tìm thấy file" });
+  }
+  return res.status(200).json({ success: true, url: req.file.path });
 };
