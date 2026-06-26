@@ -1,23 +1,54 @@
 import UserModel from "../Models/UserModel.js";
+import NotificationModel from "../Models/NotificationModel.js";
 
-export const updateNotificationSettings = async (req, res) => {
+// Lấy danh sách tất cả thông báo của quản trị viên hiện tại
+export const getNotifications = async (req, res) => {
   const userId = req.user._id;
-  const { mail, desktop, sms } = req.body;
 
   try {
-    // Validate that at least one setting is provided
-    if (mail === undefined && desktop === undefined && sms === undefined) {
+    // Truy vấn danh sách thông báo của admin từ collection riêng biệt
+    const notifications = await NotificationModel.find({ adminId: userId })
+      .sort({ createdAt: -1 });
+
+    // Định dạng lại kết quả để tương thích với trường timestamp ở Client
+    const formattedNotifications = notifications.map((notif) => ({
+      _id: notif._id,
+      type: notif.type,
+      message: notif.message,
+      read: notif.read,
+      timestamp: notif.createdAt,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data: formattedNotifications,
+    });
+  } catch (error) {
+    console.error("Error fetching notifications:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching notifications",
+      error: error.message,
+    });
+  }
+};
+
+// Cập nhật cài đặt nhận thông báo của quản trị viên (mail, desktop)
+export const updateNotificationSettings = async (req, res) => {
+  const userId = req.user._id;
+  const { mail, desktop } = req.body;
+
+  try {
+    if (mail === undefined && desktop === undefined) {
       return res.status(400).json({
         success: false,
         message: "At least one notification setting must be provided",
       });
     }
 
-    // Validate types of provided settings
     if (
       (mail !== undefined && typeof mail !== "boolean") ||
-      (desktop !== undefined && typeof desktop !== "boolean") ||
-      (sms !== undefined && typeof sms !== "boolean")
+      (desktop !== undefined && typeof desktop !== "boolean")
     ) {
       return res.status(400).json({
         success: false,
@@ -40,30 +71,24 @@ export const updateNotificationSettings = async (req, res) => {
       });
     }
 
-    // Initialize adminInfo structure if needed
     if (!user.adminInfo) {
       user.adminInfo = {
         notificationOptions: {
-          mail: false,
-          desktop: true, // Default to true for desktop notifications
-          sms: false,
+          mail: true,
+          desktop: true,
         },
       };
     } else if (!user.adminInfo.notificationOptions) {
       user.adminInfo.notificationOptions = {
-        mail: false,
-        desktop: true, // Default to true for desktop notifications
-        sms: false,
+        mail: true,
+        desktop: true,
       };
     }
 
-    // Update only the provided settings
     const currentSettings = user.adminInfo.notificationOptions;
     if (mail !== undefined) currentSettings.mail = mail;
     if (desktop !== undefined) currentSettings.desktop = desktop;
-    if (sms !== undefined) currentSettings.sms = sms;
 
-    // Save the changes
     await user.save();
 
     return res.status(200).json({
@@ -84,33 +109,36 @@ export const updateNotificationSettings = async (req, res) => {
   }
 };
 
+// Đánh dấu một thông báo cụ thể là đã đọc
 export const readOneNotification = async (req, res) => {
   const userId = req.user._id;
   const { notificationId } = req.params;
 
   try {
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-    const notification = user.adminInfo.notificationList.find(
-      (notif) => notif._id.toString() === notificationId
+    // Tìm và cập nhật trạng thái đọc của thông báo
+    const notification = await NotificationModel.findOneAndUpdate(
+      { _id: notificationId, adminId: userId },
+      { read: true },
+      { new: true }
     );
+
     if (!notification) {
       return res.status(404).json({
         success: false,
         message: "Notification not found",
       });
     }
-    notification.read = true;
-    await user.save();
+
     return res.status(200).json({
       success: true,
       message: "Notification read successfully",
-      data: notification,
+      data: {
+        _id: notification._id,
+        type: notification.type,
+        message: notification.message,
+        read: notification.read,
+        timestamp: notification.createdAt,
+      },
     });
   } catch (error) {
     console.error("Error reading notification:", error);
@@ -122,20 +150,17 @@ export const readOneNotification = async (req, res) => {
   }
 };
 
+// Đánh dấu tất cả thông báo là đã đọc
 export const readAllNotifications = async (req, res) => {
   const userId = req.user._id;
+
   try {
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-    user.adminInfo.notificationList.forEach(
-      (notification) => (notification.read = true)
+    // Cập nhật tất cả thông báo chưa đọc của admin hiện tại thành đã đọc
+    await NotificationModel.updateMany(
+      { adminId: userId, read: false },
+      { read: true }
     );
-    await user.save();
+
     return res.status(200).json({
       success: true,
       message: "All notifications read successfully",
@@ -149,4 +174,3 @@ export const readAllNotifications = async (req, res) => {
     });
   }
 };
-
