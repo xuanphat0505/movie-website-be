@@ -30,15 +30,6 @@ const userSchema = new mongoose.Schema(
           mail: { type: Boolean, default: true },
           desktop: { type: Boolean, default: true },
         },
-        notificationList: [
-          {
-            _id: { type: mongoose.Schema.Types.ObjectId, required: true },
-            type: { type: String, enum: ["add", "update", "delete"] },
-            message: { type: String },
-            read: { type: Boolean, default: false },
-            timestamp: { type: Date, default: Date.now },
-          },
-        ],
         loginHistory: [
           {
             timestamp: { type: Date },

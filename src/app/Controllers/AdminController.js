@@ -8,11 +8,12 @@ import {
   emitUserDeleted,
 } from "../../utils/AdminSocket.js";
 import UserModel from "../Models/UserModel.js";
+import NotificationModel from "../Models/NotificationModel.js";
 
 export const updateAdminProfile = async (req, res) => {
   try {
     const userId = req.params.id;
-    const { username, email, password, phone, gender, avatar, adminInfo } =
+    const { username, email, password, currentPassword, phone, gender, avatar, adminInfo } =
       req.body;
 
     // Verify if the user exists and is an admin
@@ -28,8 +29,25 @@ export const updateAdminProfile = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "Tài khoản này không phải là admin",
-        
       });
+    }
+
+    // Verify current password if password update is requested
+    if (password) {
+      if (!currentPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "Vui lòng nhập mật khẩu hiện tại để xác thực",
+        });
+      }
+
+      const isMatch = await bcrypt.compare(currentPassword, admin.password);
+      if (!isMatch) {
+        return res.status(400).json({
+          success: false,
+          message: "Mật khẩu cũ không chính xác",
+        });
+      }
     }
 
     // Check if username already exists
@@ -157,41 +175,38 @@ export const addNewUser = async (req, res) => {
 
     const user = await UserModel.create(userData);
 
-    // Create notification
-    const notification = {
-      _id: new mongoose.Types.ObjectId(),
+    // Get all admins to notify
+    const allAdmins = await UserModel.find({ role: "admin" });
+
+    // Create notification documents for each admin in separate collection
+    const notificationDocs = allAdmins.map((admin) => ({
+      adminId: admin._id,
       type: "add",
-      message: `User <strong>${user._id}</strong> has been added`,
+      message: `User <strong>${user.username || user._id}</strong> has been added`,
       read: false,
-      timestamp: new Date()
-    };
+    }));
 
-    // Get admins with different notification preferences
-    const [adminsWithDesktop, adminsWithEmail] = await Promise.all([
-      UserModel.find({
-        role: "admin",
-        "adminInfo.notificationOptions.desktop": true,
-      }),
-      UserModel.find({
-        role: "admin",
-        "adminInfo.notificationOptions.mail": true,
-      }),
-    ]);
+    const savedNotifications = await NotificationModel.insertMany(notificationDocs);
 
-    // Update notification list for all admins
-    await UserModel.updateMany(
-      { role: "admin", adminInfo: { $ne: null } },
-      {
-        $push: {
-          "adminInfo.notificationList": notification
-        },
-      }
+    // Filter admins based on their notification preferences
+    const adminsWithDesktop = allAdmins.filter(
+      (admin) => admin.adminInfo?.notificationOptions?.desktop !== false
+    );
+    const adminsWithEmail = allAdmins.filter(
+      (admin) => admin.adminInfo?.notificationOptions?.mail === true
     );
 
-    // Get the io instance and send desktop notifications
+    // Get the io instance and send socket notification
     const io = req.app.get("io");
     if (adminsWithDesktop.length > 0) {
-      emitUserAdded(io, notification);
+      const notificationPayload = {
+        _id: savedNotifications[0]?._id || new mongoose.Types.ObjectId(),
+        type: "add",
+        message: `User <strong>${user.username || user._id}</strong> has been added`,
+        read: false,
+        timestamp: new Date(),
+      };
+      emitUserAdded(io, notificationPayload);
     }
 
     // Send email notifications
@@ -333,35 +348,25 @@ export const deleteUser = async (req, res) => {
       });
     }
 
-    // Create notification
-    const notification = {
-      _id: new mongoose.Types.ObjectId(),
+    // Get all admins to notify
+    const allAdmins = await UserModel.find({ role: "admin" });
+
+    // Create notification documents for each admin
+    const notificationDocs = allAdmins.map((admin) => ({
+      adminId: admin._id,
       type: "delete",
-      message: `User <strong>${user._id}</strong> has been deleted`,
+      message: `User <strong>${user.username || user._id}</strong> has been deleted`,
       read: false,
-      timestamp: new Date()
-    };
+    }));
 
-    // Get admins with different notification preferences
-    const [adminsWithDesktop, adminsWithEmail] = await Promise.all([
-      UserModel.find({
-        role: "admin",
-        "adminInfo.notificationOptions.desktop": true,
-      }),
-      UserModel.find({
-        role: "admin",
-        "adminInfo.notificationOptions.mail": true,
-      }),
-    ]);
+    const savedNotifications = await NotificationModel.insertMany(notificationDocs);
 
-    // Update notification list for all admins
-    await UserModel.updateMany(
-      { role: "admin", adminInfo: { $ne: null } },
-      {
-        $push: {
-          "adminInfo.notificationList": notification
-        },
-      }
+    // Filter admins based on their notification preferences
+    const adminsWithDesktop = allAdmins.filter(
+      (admin) => admin.adminInfo?.notificationOptions?.desktop !== false
+    );
+    const adminsWithEmail = allAdmins.filter(
+      (admin) => admin.adminInfo?.notificationOptions?.mail === true
     );
 
     // Delete the user
@@ -370,9 +375,16 @@ export const deleteUser = async (req, res) => {
     // Get the io instance
     const io = req.app.get("io");
 
-    // Send desktop notifications
+    // Send socket notifications
     if (adminsWithDesktop.length > 0) {
-      emitUserDeleted(io, notification);
+      const notificationPayload = {
+        _id: savedNotifications[0]?._id || new mongoose.Types.ObjectId(),
+        type: "delete",
+        message: `User <strong>${user.username || user._id}</strong> has been deleted`,
+        read: false,
+        timestamp: new Date(),
+      };
+      emitUserDeleted(io, notificationPayload);
     }
 
     // Send email notifications
@@ -461,43 +473,40 @@ export const updateUser = async (req, res) => {
       new: true,
     });
 
-    // Create notification for the update
-    const notification = {
-      _id: new mongoose.Types.ObjectId(),
+    // Get all admins to notify
+    const allAdmins = await UserModel.find({ role: "admin" });
+
+    // Create notification documents for each admin
+    const notificationDocs = allAdmins.map((admin) => ({
+      adminId: admin._id,
       type: "update",
-      message: `User <strong>${updatedUser._id}</strong> has been updated`,
+      message: `User <strong>${updatedUser.username || updatedUser._id}</strong> has been updated`,
       read: false,
-      timestamp: new Date()
-    };
+    }));
 
-    // Get admins with different notification preferences
-    const [adminsWithDesktop, adminsWithEmail] = await Promise.all([
-      UserModel.find({
-        role: "admin",
-        "adminInfo.notificationOptions.desktop": true,
-      }),
-      UserModel.find({
-        role: "admin",
-        "adminInfo.notificationOptions.mail": true,
-      }),
-    ]);
+    const savedNotifications = await NotificationModel.insertMany(notificationDocs);
 
-    // Update notification list for all admins
-    await UserModel.updateMany(
-      { role: "admin", adminInfo: { $ne: null } },
-      {
-        $push: {
-          "adminInfo.notificationList": notification
-        },
-      }
+    // Filter admins based on their notification preferences
+    const adminsWithDesktop = allAdmins.filter(
+      (admin) => admin.adminInfo?.notificationOptions?.desktop !== false
+    );
+    const adminsWithEmail = allAdmins.filter(
+      (admin) => admin.adminInfo?.notificationOptions?.mail === true
     );
 
     // Get the io instance
     const io = req.app.get("io");
 
-    // Send desktop notifications
+    // Send socket notifications
     if (adminsWithDesktop.length > 0) {
-      emitUserUpdated(io, notification);
+      const notificationPayload = {
+        _id: savedNotifications[0]?._id || new mongoose.Types.ObjectId(),
+        type: "update",
+        message: `User <strong>${updatedUser.username || updatedUser._id}</strong> has been updated`,
+        read: false,
+        timestamp: new Date(),
+      };
+      emitUserUpdated(io, notificationPayload);
     }
 
     // Send email notifications
