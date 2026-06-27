@@ -1,73 +1,30 @@
-import CommentModel from "../Models/CommentModel.js";
-import UserModel from "../Models/UserModel.js";
-import RateModel from "../Models/RateModel.js";
+import * as CommentService from "../../services/CommentService.js";
 
-export const createComment = async (req, res) => {  
+// Tạo bình luận mới thông
+export const createComment = async (req, res) => {
   const userId = req.user._id;
-  const { movieId, content, isSpoiler, movieName, parentId, movieThumb } = req.body;
   try {
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    const comment = await CommentModel.create({
-      userId,
-      movieId,
-      content,
-      isSpoiler,
-      movieName,
-      movieThumb,
-      parentId: parentId || null
-    });
-
-    // If this is a reply, update the parent comment
-    if (parentId) {
-      await CommentModel.findByIdAndUpdate(parentId, {
-        $push: { replies: comment._id }
-      });
-    }
-
-    await comment.save();
+    const comment = await CommentService.createComment(userId, req.body);
     return res.status(200).json({
       success: true,
       message: "Comment created successfully",
       data: comment,
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res
+      .status(error.message.includes("User not found") ? 404 : 500)
+      .json({
+        success: false,
+        message: error.message,
+      });
   }
 };
 
+// Lấy danh sách bình luận của một bộ phim
 export const getComments = async (req, res) => {
   const movieId = req.params.movieId;
   try {
-    const comments = await CommentModel.find({ 
-      movieId: movieId,
-      parentId: null // Only get top-level comments
-    })
-    .populate({
-      path: 'userId',
-      select: 'username avatar'
-    })
-    .populate({
-      path: 'replies',
-      populate: [
-        {
-          path: 'userId',
-          select: 'username avatar'
-        },
-        {
-          path: 'replies',
-          populate: {
-            path: 'userId',
-            select: 'username avatar'
-          }
-        }
-      ]
-    })
-    .sort({ createdAt: -1 });
-
+    const comments = await CommentService.getCommentsByMovie(movieId);
     return res.status(200).json({
       success: true,
       message: "Get comments successfully",
@@ -78,12 +35,10 @@ export const getComments = async (req, res) => {
   }
 };
 
+// Lấy danh sách các bình luận mới nhất
 export const getNewestComments = async (req, res) => {
   try {
-    const comments = await CommentModel.find()
-      .populate("userId")
-      .sort({ createdAt: -1 })
-      .limit(10);
+    const comments = await CommentService.getNewestCommentsList();
     return res.status(200).json({
       success: true,
       message: "Get newest comments successfully",
@@ -94,128 +49,58 @@ export const getNewestComments = async (req, res) => {
   }
 };
 
+// Thích/hủy thích bình luận thông
 export const likeComment = async (req, res) => {
   const userId = req.user._id;
   const { commentId } = req.params;
   try {
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-    const comment = await CommentModel.findById(commentId);
-    if (!comment) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Comment not found" });
-    }
-
-    // Check if user already liked the comment
-    const alreadyLiked = comment.likedBy.includes(userId);
-    const alreadyDisliked = comment.dislikedBy.includes(userId);
-
-    if (alreadyLiked) {
-      // Remove like
-      comment.like--;
-      comment.likedBy = comment.likedBy.filter(id => id.toString() !== userId.toString());
-    } else {
-      // Add like
-      comment.like++;
-      comment.likedBy.push(userId);
-      
-      // Remove dislike if exists
-      if (alreadyDisliked) {
-        comment.dislike--;
-        comment.dislikedBy = comment.dislikedBy.filter(id => id.toString() !== userId.toString());
-      }
-    }
-
-    await comment.save();
+    const result = await CommentService.likeCommentToggle(commentId, userId);
     return res.status(200).json({
       success: true,
-      message: alreadyLiked ? "Comment unliked successfully" : "Comment liked successfully",
+      message: result.message,
       data: {
-        like: comment.like,
-        dislike: comment.dislike,
-        isLiked: !alreadyLiked,
-        isDisliked: false
+        like: result.like,
+        dislike: result.dislike,
+        isLiked: result.isLiked,
+        isDisliked: result.isDisliked,
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.message.includes("not found") ? 404 : 500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
+// Không thích/hủy không thích bình luận thông
 export const dislikeComment = async (req, res) => {
   const userId = req.user._id;
   const { commentId } = req.params;
   try {
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-    const comment = await CommentModel.findById(commentId);
-    if (!comment) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Comment not found" });
-    }
-
-    // Check if user already disliked the comment
-    const alreadyDisliked = comment.dislikedBy.includes(userId);
-    const alreadyLiked = comment.likedBy.includes(userId);
-
-    if (alreadyDisliked) {
-      // Remove dislike
-      comment.dislike--;
-      comment.dislikedBy = comment.dislikedBy.filter(id => id.toString() !== userId.toString());
-    } else {
-      // Add dislike
-      comment.dislike++;
-      comment.dislikedBy.push(userId);
-      
-      // Remove like if exists
-      if (alreadyLiked) {
-        comment.like--;
-        comment.likedBy = comment.likedBy.filter(id => id.toString() !== userId.toString());
-      }
-    }
-
-    await comment.save();
+    const result = await CommentService.dislikeCommentToggle(commentId, userId);
     return res.status(200).json({
       success: true,
-      message: alreadyDisliked ? "Comment undisliked successfully" : "Comment disliked successfully",
+      message: result.message,
       data: {
-        like: comment.like,
-        dislike: comment.dislike,
-        isLiked: false,
-        isDisliked: !alreadyDisliked
+        like: result.like,
+        dislike: result.dislike,
+        isLiked: result.isLiked,
+        isDisliked: result.isDisliked,
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.message.includes("not found") ? 404 : 500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
+// Lấy danh sách bình luận tương tác cao nhất
 export const getTopComments = async (req, res) => {
   try {
-    // Get comments for the movie
-    const comments = await CommentModel.find()
-      .populate("userId", "username avatar")
-
-    // Calculate total interactions (likes + replies) for each comment
-    const commentsWithInteractions = comments.map((comment) => ({
-      ...comment.toObject(),
-      totalInteractions: comment.like + comment.replies.length,
-    }));
-
-    // Sort by total interactions in descending order
-    const sortedComments = commentsWithInteractions.sort(
-      (a, b) => b.totalInteractions - a.totalInteractions
-    );
-
-    // Get top 10 comments
-    const topComments = sortedComments.slice(0, 10);
-
+    const topComments = await CommentService.getTopInteractedComments();
     res.status(200).json({
       success: true,
       data: topComments,

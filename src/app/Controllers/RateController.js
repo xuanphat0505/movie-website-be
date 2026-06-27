@@ -1,35 +1,23 @@
-import RateModel from "../Models/RateModel.js";
-import UserModel from "../Models/UserModel.js";
+import * as RateService from "../../services/RateService.js";
 
+// Tạo đánh giá thông
 export const createRate = async (req, res) => {
   const userId = req.user._id;
-  const { movieId, content, rateMark } = req.body;
   try {
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      return res.status(400).json({ message: "User not found" });
-    }
-    const rate = await RateModel.create({
-      userId,
-      movieId,
-      content,
-      rateMark,
-    });
+    const rate = await RateService.createRate(userId, req.body);
     return res
       .status(200)
       .json({ message: "Rate created successfully", data: rate });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return res.status(error.message.includes("User not found") ? 400 : 500).json({ message: error.message });
   }
 };
 
+// Lấy danh sách đánh giá
 export const getRate = async (req, res) => {
   const { movieId } = req.params;
   try {
-    const rate = await RateModel.find({ movieId }).populate({
-      path: "userId",
-      select: "username avatar",
-    });
+    const rate = await RateService.getRatesByMovie(movieId);
     return res
       .status(200)
       .json({ message: "Rate fetched successfully", data: rate });
@@ -38,120 +26,44 @@ export const getRate = async (req, res) => {
   }
 };
 
+// Thích/hủy thích đánh giá thông
 export const likeRate = async (req, res) => {
   const userId = req.user._id;
   const { rateId } = req.params;
   try {
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
-    const rate = await RateModel.findById(rateId);
-    if (!rate) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Rate not found" });
-    }
-
-    // Check if user already liked the comment
-    const alreadyLiked = rate.likedBy.includes(userId);
-    const alreadyDisliked = rate.dislikedBy.includes(userId);
-
-    if (alreadyLiked) {
-      // Remove like
-      rate.like--;
-      rate.likedBy = rate.likedBy.filter(
-        (id) => id.toString() !== userId.toString()
-      );
-    } else {
-      // Add like
-      rate.like++;
-      rate.likedBy.push(userId);
-
-      // Remove dislike if exists
-      if (alreadyDisliked) {
-        rate.dislike--;
-        rate.dislikedBy = rate.dislikedBy.filter(
-          (id) => id.toString() !== userId.toString()
-        );
-      }
-    }
-
-    await rate.save();
+    const result = await RateService.likeRateToggle(rateId, userId);
     return res.status(200).json({
       success: true,
-      message: alreadyLiked
-        ? "Rate unliked successfully"
-        : "Rate liked successfully",
+      message: result.message,
       data: {
-        like: rate.like,
-        dislike: rate.dislike,
-        isLiked: !alreadyLiked,
-        isDisliked: false,
+        like: result.like,
+        dislike: result.dislike,
+        isLiked: result.isLiked,
+        isDisliked: result.isDisliked,
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.message.includes("not found") ? 404 : 500).json({ success: false, message: error.message });
   }
 };
 
+// Không thích/hủy không thích đánh giá thông
 export const dislikeRate = async (req, res) => {
   const userId = req.user._id;
   const { rateId } = req.params;
   try {
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
-    const rate = await RateModel.findById(rateId);
-    if (!rate) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Rate not found" });
-    }
-
-    // Check if user already disliked the comment
-    const alreadyDisliked = rate.dislikedBy.includes(userId);
-    const alreadyLiked = rate.likedBy.includes(userId);
-
-    if (alreadyDisliked) {
-      // Remove dislike
-      rate.dislike--;
-      rate.dislikedBy = rate.dislikedBy.filter(
-        (id) => id.toString() !== userId.toString()
-      );
-    } else {
-      // Add dislike
-      rate.dislike++;
-      rate.dislikedBy.push(userId);
-
-      // Remove like if exists
-      if (alreadyLiked) {
-        rate.like--;
-        rate.likedBy = rate.likedBy.filter(
-          (id) => id.toString() !== userId.toString()
-        );
-      }
-    }
-
-    await rate.save();
+    const result = await RateService.dislikeRateToggle(rateId, userId);
     return res.status(200).json({
       success: true,
-      message: alreadyDisliked
-        ? "Rate undisliked successfully"
-        : "Rate disliked successfully",
+      message: result.message,
       data: {
-        like: rate.like,
-        dislike: rate.dislike,
-        isLiked: false,
-        isDisliked: !alreadyDisliked,
+        like: result.like,
+        dislike: result.dislike,
+        isLiked: result.isLiked,
+        isDisliked: result.isDisliked,
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.message.includes("not found") ? 404 : 500).json({ success: false, message: error.message });
   }
 };

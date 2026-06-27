@@ -6,7 +6,7 @@ dotenv.config();
 // Gửi email thông qua dịch vụ Brevo HTTP API V3 (Transactional Emails)
 export const sendMail = async (to, subject, html) => {
   const apiKey = process.env.BREVO_API_KEY;
-  const senderEmail = process.env.EMAIL_USER || "phattran052004@gmail.com";
+  const senderEmail = process.env.EMAIL_USER;
 
   if (!apiKey) {
     throw new Error("BREVO_API_KEY is not defined in environment variables");
