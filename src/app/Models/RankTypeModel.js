@@ -34,6 +34,11 @@ const rankTypeSchema = new mongoose.Schema(
   }
 );
 
+// Tính điểm tổng hợp dựa trên views, likes và comments
+rankTypeSchema.methods.calculateTotalScore = function () {
+  this.totalScore = this.views * 1 + this.likes * 2 + this.comments * 3;
+};
+
 
 const RankType = mongoose.model("RankType", rankTypeSchema);
 

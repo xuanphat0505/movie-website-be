@@ -1,46 +1,19 @@
-import SystemSetting from "../Models/SystemSettingModel.js";
+import * as SettingService from "../../services/SystemSettingService.js";
 
-// Lấy cấu hình hệ thống hiện tại và tạo mặc định nếu chưa tồn tại trong cơ sở dữ liệu
+// Lấy cấu hình hệ thống hiện tại
 export const getSystemSettings = async (req, res) => {
   try {
-    let settings = await SystemSetting.findOne();
-    if (!settings) {
-      settings = await SystemSetting.create({
-        maintenanceMode: false,
-        pageLimit: 12,
-        hotline: "1900 6789",
-        facebookUrl: "https://facebook.com/streamlab.vn",
-      });
-    }
+    const settings = await SettingService.getSettings();
     return res.status(200).json({ success: true, data: settings });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Cập nhật cấu hình hệ thống và phát tín hiệu thay đổi đến các client qua Socket.io
+// Cập nhật cấu hình hệ thống và phát tín hiệu qua Socket.io
 export const updateSystemSettings = async (req, res) => {
   try {
-    let settings = await SystemSetting.findOne();
-    if (!settings) {
-      settings = new SystemSetting();
-    }
-
-    const { maintenanceMode, pageLimit, hotline, facebookUrl } = req.body;
-    if (maintenanceMode !== undefined) {
-      settings.maintenanceMode = maintenanceMode;
-    }
-    if (pageLimit !== undefined) {
-      settings.pageLimit = pageLimit;
-    }
-    if (hotline !== undefined) {
-      settings.hotline = hotline;
-    }
-    if (facebookUrl !== undefined) {
-      settings.facebookUrl = facebookUrl;
-    }
-
-    await settings.save();
+    const settings = await SettingService.updateSettings(req.body);
 
     const io = req.app.get("io");
     if (io) {
