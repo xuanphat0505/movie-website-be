@@ -24,11 +24,15 @@ export const getTotalUsersCount = async () => {
 
 // Lấy thống kê tổng quan các chỉ số cơ bản của trang quản trị
 export const getOverviewStatsData = async () => {
-  const [totalUsers, totalFavorites, totalComments] = await Promise.all([
+  const [totalUsers, favoriteStats, totalComments] = await Promise.all([
     User.countDocuments(),
-    Favorite.countDocuments(),
+    Favorite.aggregate([
+      { $project: { count: { $size: { $ifNull: ["$movies", []] } } } },
+      { $group: { _id: null, total: { $sum: "$count" } } }
+    ]),
     Comment.countDocuments(),
   ]);
+  const totalFavorites = favoriteStats[0]?.total || 0;
   return { totalUsers, totalFavorites, totalComments };
 };
 
