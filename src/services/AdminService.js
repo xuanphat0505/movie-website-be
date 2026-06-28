@@ -52,6 +52,8 @@ export const updateAdminProfile = async (userId, data) => {
     }
   }
 
+  const adminObj = admin.toObject();
+
   const updateData = {
     username,
     email,
@@ -59,10 +61,14 @@ export const updateAdminProfile = async (userId, data) => {
     gender,
     avatar,
     adminInfo: {
-      ...admin.adminInfo,
-      ...adminInfo,
+      ...(adminObj.adminInfo || {}),
+      ...(adminInfo || {}),
+      notificationOptions: {
+        ...(adminObj.adminInfo?.notificationOptions || {}),
+        ...(adminInfo?.notificationOptions || {}),
+      },
       loginHistory: [
-        ...(admin.adminInfo?.loginHistory || []),
+        ...(adminObj.adminInfo?.loginHistory || []),
         ...(adminInfo?.loginHistory ? [adminInfo.loginHistory] : []),
       ],
     },
