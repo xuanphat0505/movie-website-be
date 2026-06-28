@@ -19,6 +19,10 @@ const userSchema = new mongoose.Schema(
     },
     role: { type: String, enum: ["user", "admin"], default: "user" },
     status: { type: String, enum: ["active", "inactive"], default: "inactive" },
+    // Trạng thái kích hoạt bảo mật hai lớp
+    isMfaEnabled: { type: Boolean, default: false },
+    // Khóa bí mật dùng để sinh mã xác thực TOTP
+    mfaSecret: { type: String, default: null },
     // Admin specific fields
     adminInfo: {
       type: {
