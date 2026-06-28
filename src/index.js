@@ -18,6 +18,7 @@ import notificationRoutes from "./routes/notification.js";
 import analyticsRoutes from "./routes/analytics.js";
 import adminRoutes from "./routes/admin.js";
 import settingRoutes from "./routes/setting.js";
+import reportRoutes from "./routes/report.js";
 
 dotenv.config();
 
@@ -76,6 +77,7 @@ app.use("/api/v1/notification", notificationRoutes);
 app.use("/api/v1/analytics", analyticsRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/setting", settingRoutes);
+app.use("/api/v1/report", reportRoutes);
 
 // Start server
 httpServer.listen(port, () => {
