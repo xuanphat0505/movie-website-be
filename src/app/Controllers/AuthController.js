@@ -174,8 +174,8 @@ export const mfaSetup = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    // Sinh mã bí mật TOTP ngẫu nhiên
-    const secret = generateSecret();
+    // Tái sử dụng khóa bí mật cũ đã cấu hình
+    const secret = user.mfaSecret || generateSecret();
     // Tạo URI cho ứng dụng authenticator
     const otpauthUrl = generateURI({ secret, label: user.email, issuer: "StreamLab Admin" });
     // Sinh mã QR dạng base64 từ URI
@@ -248,7 +248,6 @@ export const mfaDisable = async (req, res) => {
 
     // Hủy kích hoạt MFA
     user.isMfaEnabled = false;
-    user.mfaSecret = null;
     await user.save();
 
     return res.status(200).json({
